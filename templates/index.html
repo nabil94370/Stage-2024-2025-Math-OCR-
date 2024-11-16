@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analyse de Fonction</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .symbol-button {
+            display: inline-block;
+            margin: 5px;
+            padding: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .symbol-button:hover {
+            background-color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Analysez une fonction</h1>
+    <input type="text" id="exercise" placeholder="Entrez votre fonction ici" />
+    <button id="analyze-button">Analyser</button>
+    <h2>Clavier de symboles :</h2>
+    <div id="symbol-keyboard">
+        <div class="symbol-button" onclick="insertSymbol('∫')">∫</div>
+        <div class="symbol-button" onclick="insertSymbol('dx')">dx</div>
+        <div class="symbol-button" onclick="insertSymbol('d/dx')">d/dx</div>
+        <div class="symbol-button" onclick="insertSymbol('√')">√</div>
+        <div class="symbol-button" onclick="insertSymbol('∞')">∞</div>
+        <div class="symbol-button" onclick="insertSymbol('lim')">lim</div>
+        <div class="symbol-button" onclick="insertSymbol('Σ')">Σ</div>
+        <div class="symbol-button" onclick="insertSymbol('∏')">∏</div>
+        <div class="symbol-button" onclick="insertSymbol('ln')">ln</div>
+        <div class="symbol-button" onclick="insertSymbol('e^')">e^</div>
+        <div class="symbol-button" onclick="insertSymbol('|x|')">|x|</div>
+        <div class="symbol-button" onclick="insertSymbol('sin')">sin</div>
+        <div class="symbol-button" onclick="insertSymbol('cos')">cos</div>
+        <div class="symbol-button" onclick="insertSymbol('tan')">tan</div>
+    </div>
+    <h2>Analyse :</h2>
+    <pre id="analysis-result"></pre>
+
+    <script>
+        function insertSymbol(symbol) {
+            const input = document.getElementById('exercise');
+            input.value += symbol;
+            input.focus();
+        }
+
+        $(document).ready(function() {
+            $('#analyze-button').click(function() {
+                const exercise = $('#exercise').val();
+                $.ajax({
+                    url: '/analyze',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ exercise_statement: exercise }),
+                    success: function(data) {
+                        $('#analysis-result').text(data.analysis);
+                    },
+                    error: function(xhr) {
+                        $('#analysis-result').text('Erreur: ' + xhr.responseJSON.error);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
