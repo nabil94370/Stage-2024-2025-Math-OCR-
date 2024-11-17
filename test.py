@@ -1,9 +1,8 @@
-from PIL import Image
-import os
 import cv2
 import numpy as np
+import os
 
-def split_and_zoom_image_nearest_neighbor(image_path, output_dir, padding=5, zoom_factor=20):
+def split_image_into_phrases_with_zoom_and_padding(image_path, output_dir, zoom_factor=3.0, padding=10):
     # Charger l'image en niveaux de gris
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
@@ -13,50 +12,48 @@ def split_and_zoom_image_nearest_neighbor(image_path, output_dir, padding=5, zoo
     # Binarisation de l'image
     _, binary = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY_INV)
 
-    # Projeter les pixels pour détecter les espaces horizontaux
-    projection = np.sum(binary, axis=1)
+    # Trouver les contours pour détecter les blocs de texte
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Détecter les lignes contenant du texte
-    start, end = None, None
-    line_segments = []
-    for i, value in enumerate(projection):
-        if value > 0 and start is None:  # Début d'une nouvelle ligne
-            start = i
-        elif value == 0 and start is not None:  # Fin de la ligne
-            end = i
-            line_segments.append((start, end))
-            start, end = None, None
+    # Trier les contours par leur position de gauche à droite et de haut en bas
+    contours = sorted(contours, key=lambda c: (cv2.boundingRect(c)[1], cv2.boundingRect(c)[0]))
 
-    # Gérer la dernière ligne (si elle n'a pas de fin détectée)
-    if start is not None:
-        line_segments.append((start, len(projection)))
+    # Fusionner les contours en blocs de phrases
+    phrase_bounds = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if not phrase_bounds:
+            phrase_bounds.append((x, y, x + w, y + h))
+        else:
+            px1, py1, px2, py2 = phrase_bounds[-1]
+            # Fusionner si les contours sont proches verticalement et horizontalement
+            if abs(y - py1) < 15:  # Ajustez ce seuil si nécessaire
+                phrase_bounds[-1] = (min(px1, x), min(py1, y), max(px2, x + w), max(py2, y + h))
+            else:
+                phrase_bounds.append((x, y, x + w, y + h))
 
     # Créer un dossier pour les sorties
     os.makedirs(output_dir, exist_ok=True)
 
-    # Découper, zoomer et sauvegarder chaque ligne
-    height, width = img.shape
-    for idx, (start, end) in enumerate(line_segments):
-        # Ajouter du padding tout en évitant les dépassements
-        start_with_padding = max(0, start - padding)
-        end_with_padding = min(height, end + padding)
+    # Découper, ajouter du padding, et sauvegarder chaque phrase avec un zoom
+    for idx, (x1, y1, x2, y2) in enumerate(phrase_bounds):
+        # Ajouter du padding
+        x1_padded = max(0, x1 - padding)
+        y1_padded = max(0, y1 - padding)
+        x2_padded = min(img.shape[1], x2 + padding)
+        y2_padded = min(img.shape[0], y2 + padding)
 
-        # Découper l'image avec le padding
-        line_img = img[start_with_padding:end_with_padding, :]
+        # Découpe avec padding
+        phrase_img = img[y1_padded:y2_padded, x1_padded:x2_padded]
 
-        # Convertir l'image en format compatible avec Pillow
-        line_img_pil = Image.fromarray(line_img)
+        # Appliquer le zoom
+        zoomed_img = cv2.resize(phrase_img, None, fx=zoom_factor, fy=zoom_factor, interpolation=cv2.INTER_CUBIC)
 
-        # Appliquer un zoom sans interpolation (nearest neighbor)
-        zoomed_width = int(line_img_pil.width * zoom_factor)
-        zoomed_height = int(line_img_pil.height * zoom_factor)
-        zoomed_img = line_img_pil.resize((zoomed_width, zoomed_height), Image.NEAREST)
+        # Sauvegarder l'image zoomée au format JPG
+        output_path = os.path.join(output_dir, f"phrase_{idx}.jpg")
+        cv2.imwrite(output_path, zoomed_img, [cv2.IMWRITE_JPEG_QUALITY, 95])  # 95 = qualité JPG
 
-        # Sauvegarder l'image zoomée
-        output_path = os.path.join(output_dir, f"line_{idx}_zoomed.png")
-        zoomed_img.save(output_path)
-
-    print(f"Image divisée en {len(line_segments)} lignes avec zoom sans interpolation. Résultats enregistrés dans {output_dir}.")
+    print(f"Image divisée en {len(phrase_bounds)} phrases avec padding et un zoom de {zoom_factor*100}%. Résultats enregistrés en JPG dans {output_dir}.")
 
 # Exemple d'utilisation
-split_and_zoom_image_nearest_neighbor("moin.jpg", "output_phrases", padding=5, zoom_factor=20)
+split_image_into_phrases_with_zoom_and_padding("moin.jpg", "output_phrases", zoom_factor=3.0, padding=10)
